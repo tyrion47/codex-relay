@@ -83,7 +83,17 @@ async function main() {
       const r = spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", shim, "mode", a || "status"], { stdio: "inherit" });
       process.exit(r.status || 0);
     }
-    default: console.log("usage: relay-codex <up|down|restart|status|mode <router|openai|status>|model <route> <provider,model>>");
+    case "ui": {
+      let cfg; try { ({ cfg } = cfgmod.load()); } catch (e) { console.error("config invalid: " + e.message); process.exit(2); }
+      const url = `http://${cfg.host}:${cfg.port}/__relay/ui`;
+      const h = await getHealth(cfg.port, cfg.host);
+      if (!h || h.service !== "codex-relay") { await cmdUp(); }
+      console.log("opening " + url);
+      try { spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore", windowsHide: true }).unref(); }
+      catch { console.log("open manually: " + url); }
+      return;
+    }
+    default: console.log("usage: relay-codex <up|down|restart|status|ui|mode <router|openai|status>|model <route> <provider,model>>");
   }
 }
 main();

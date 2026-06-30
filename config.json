@@ -1,0 +1,31 @@
+{
+  "host": "127.0.0.1",
+  "port": 9001,
+  "longContextThreshold": 60000,
+  "logLevel": "info",
+  "logBodyMaxChars": 800,
+  "requestTimeoutMs": 600000,
+  "metrics": { "ringSize": 10000 },
+  "providers": {
+    "deepseek": { "baseUrl": "https://api.deepseek.com/chat/completions", "profile": "deepseek", "models": ["deepseek-v4-pro", "deepseek-v4-flash"] },
+    "kimi": { "baseUrl": "https://api.moonshot.ai/v1/chat/completions", "profile": "kimi", "models": ["kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"] },
+    "sakana": { "baseUrl": "https://api.sakana.ai/v1/chat/completions", "profile": "sakana", "models": ["fugu", "fugu-ultra"] },
+    "openrouter": { "baseUrl": "https://openrouter.ai/api/v1/chat/completions", "profile": "openrouter-free", "models": ["openai/gpt-oss-120b:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-20b:free", "google/gemma-4-31b-it:free"] },
+    "openrouter-paid": { "baseUrl": "https://openrouter.ai/api/v1/chat/completions", "profile": "openrouter-paid", "models": ["deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash"] },
+    "nvidia": { "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions", "profile": "nvidia", "models": ["nvidia/nemotron-3-super-120b-a12b", "minimaxai/minimax-m3", "google/gemma-4-31b-it"] },
+    "nvidia-llama-super": { "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions", "profile": "nvidia-plain", "models": ["nvidia/llama-3.3-nemotron-super-49b-v1.5"] },
+    "nvidia-glm": { "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions", "profile": "nvidia-plain", "models": ["z-ai/glm-5.1"] },
+    "vision": { "baseUrl": "https://openrouter.ai/api/v1/chat/completions", "profile": "gemini", "models": ["google/gemini-2.5-flash-lite-preview-09-2025", "google/gemini-2.5-flash"] },
+    "nvidia-deepseek-pro": { "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions", "profile": "nvidia-deepseek-pro", "models": ["deepseek-ai/deepseek-v4-pro"] },
+    "nvidia-deepseek-flash": { "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions", "profile": "nvidia-deepseek-flash", "models": ["deepseek-ai/deepseek-v4-flash"] }
+  },
+  "routes": {
+    "default": { "target": "deepseek,deepseek-v4-pro", "fallback": "chain", "fallbackTarget": "openrouter-paid,deepseek/deepseek-v4-flash" },
+    "background": { "target": "deepseek,deepseek-v4-flash", "fallback": "chain", "fallbackTarget": "nvidia-glm,z-ai/glm-5.1" },
+    "think": { "target": "deepseek,deepseek-v4-pro", "fallback": "chain", "fallbackTarget": "nvidia-deepseek-pro,deepseek-ai/deepseek-v4-pro" },
+    "longContext": { "target": "deepseek,deepseek-v4-pro", "fallback": "chain", "fallbackTarget": "kimi,kimi-k2.7-code" },
+    "webSearch": { "target": "deepseek,deepseek-v4-flash", "fallback": "chain", "fallbackTarget": "openrouter-paid,deepseek/deepseek-v4-flash" },
+    "image": { "target": "vision,google/gemini-2.5-flash-lite-preview-09-2025", "fallback": "chain", "fallbackTarget": "deepseek,deepseek-v4-flash" }
+  },
+  "templates": {}
+}

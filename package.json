@@ -1,0 +1,9 @@
+{
+  "name": "codex-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-provider router/relay for Codex CLI -> cheap/free providers, with reasoning normalizer, hot-reloading daemon, auto-fallback to OpenAI.",
+  "bin": { "relay-codex": "cli.js" },
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" }
+}

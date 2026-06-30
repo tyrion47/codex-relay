@@ -147,10 +147,48 @@ async function makeServer() {
   return http.createServer(async (req, res) => {
     try {
       const url = (req.url || "").split("?")[0];
+      const isAdmin = url.startsWith("/__relay/") && url !== "/__relay/health" && url !== "/__relay/metrics";
+      const loopback = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket?.remoteAddress || "");
+      if (isAdmin && !loopback) return sendJson(res, 403, { error: "admin endpoints are loopback-only" });
+
       if (req.method === "GET" && url === "/__relay/health") return sendJson(res, 200, health());
       if (req.method === "GET" && url === "/health") return sendJson(res, 200, { status: "ok" });
       if (req.method === "GET" && url === "/__relay/metrics") return sendJson(res, 200, metrics.snapshot());
       const maxBytes = (state.cfg && state.cfg.maxBodyBytes) || 33554432;
+
+      // UI
+      if (req.method === "GET" && url === "/__relay/ui") {
+        const html = fs.readFileSync(path.join(cfgmod.ROOT, "ui.html"), "utf8");
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+        return res.end(html);
+      }
+      // Config read/write
+      if (req.method === "GET" && url === "/__relay/config") return sendJson(res, 200, { config: state.cfg, hash: state.hash, routes: cfgmod.ROUTE_KEYS });
+      if (req.method === "PUT" && url === "/__relay/config") {
+        const raw = await readBody(req, maxBytes);
+        let body; try { body = JSON.parse(raw.toString("utf8")); } catch (e) { return sendJson(res, 400, { ok: false, errors: ["bad JSON"] }); }
+        const v = cfgmod.validate(body);
+        if (!v.ok) return sendJson(res, 200, { ok: false, errors: v.errors });
+        cfgmod.writeJsonAtomic(cfgmod.CONFIG_PATH, body);
+        loadAll();
+        return sendJson(res, 200, { ok: true, hash: state.hash });
+      }
+      // Secrets
+      if (req.method === "GET" && url === "/__relay/secrets") {
+        const s = cfgmod.loadSecrets(); const out = {};
+        for (const k of Object.keys(s)) { if (k.startsWith("_")) continue; out[k] = !!s[k]; }
+        return sendJson(res, 200, { secrets: out });
+      }
+      if (req.method === "PUT" && url === "/__relay/secrets") {
+        const raw = await readBody(req, maxBytes);
+        let body; try { body = JSON.parse(raw.toString("utf8")); } catch (e) { return sendJson(res, 400, { ok: false, errors: ["bad JSON"] }); }
+        const s = cfgmod.loadSecrets();
+        for (const k of Object.keys(body)) { if (body[k] === "") delete s[k]; else s[k] = body[k]; }
+        cfgmod.writeJsonAtomic(cfgmod.SECRETS_PATH, s);
+        state.secrets = s;
+        return sendJson(res, 200, { ok: true });
+      }
+
       if (req.method === "GET" && url.startsWith("/v1/models")) return sendJson(res, 200, modelListFromConfig(state.cfg));
       if (req.method === "GET") return sendJson(res, 200, { status: "ok", proxy: "codex-relay" });
       if (req.method === "POST" && url === "/v1/responses") { const raw = await readBody(req, maxBytes); return handleResponses(req, res, raw); }

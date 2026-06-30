@@ -50,7 +50,7 @@ async function cmdStatus() {
   console.log(`config: serving ${h.configHash}  on-disk ${onDisk}  ${h.configHash === onDisk ? "(sync)" : "(STALE)"}`);
   console.log(`fallback-to-OpenAI: ${h.fallbackEnabled ? "ON" : "OFF (secrets.openai empty)"}`);
   console.log("routes:");
-  for (const k of cfgmod.ROUTE_KEYS) { const r = h.routes[k]; console.log(`  ${k.padEnd(12)} -> ${String(r.target).padEnd(48)} [${r.lastResult}]  req ${r.requests} err ${r.errors} fb ${r.fallbacks}`); }
+  for (const k of cfgmod.ROUTE_KEYS) { const r = h.routes[k]; console.log(`  ${k.padEnd(12)} -> ${String(r.target).padEnd(48)} [${r.lastResult}]  req ${r.requests||0} err ${r.errors||0} fb ${r.fallbacks||0}`); }
 }
 function cmdModel(route, target) {
   if (!cfgmod.ROUTE_KEYS.includes(route)) { console.error(`unknown route "${route}". one of: ${cfgmod.ROUTE_KEYS.join(", ")}`); process.exit(2); }
@@ -78,7 +78,12 @@ async function main() {
     case "restart": return cmdRestart();
     case "status": return cmdStatus();
     case "model": return cmdModel(a, b);
-    default: console.log("usage: relay-codex <up|down|restart|status|model <route> <provider,model>>");
+    case "mode": {
+      const shim = path.join(cfgmod.ROOT, "codex-shims.ps1");
+      const r = spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", shim, "mode", a || "status"], { stdio: "inherit" });
+      process.exit(r.status || 0);
+    }
+    default: console.log("usage: relay-codex <up|down|restart|status|mode <router|openai|status>|model <route> <provider,model>>");
   }
 }
 main();

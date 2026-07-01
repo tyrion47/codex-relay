@@ -36,7 +36,8 @@ supports_websockets = false
 "@
 
   $existing = Get-Content $ConfigPath -Raw
-  $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\[model_providers' }) -join "`n"
+  $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\s*\[model_providers' }) -join "`n"
+  $rest = $rest -replace '(?m)^\s*name\s*=\s*".*"\s*
   $final = $newCfg + "`n" + ($rest.Trim())
   Write-Utf8NoBom $ConfigPath $final
   Write-Host "Codex CLI -> relay-router $BaseUrl (model_provider: codex-relay)"
@@ -55,6 +56,241 @@ model_reasoning_effort = "medium"
 
   $existing = Get-Content $ConfigPath -Raw
   $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\[model_providers' }) -join "`n"
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = $rest -replace '(?m)^\s*base_url\s*=\s*".*"\s*
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> relay-router $BaseUrl (model_provider: codex-relay)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-OpenAI {
+  Backup-Config
+  $bak = Join-Path $CodexHome "config-openai.toml.bak.$((Get-Date).ToString('yyyyMMddHHmmss'))"
+  Copy-Item $ConfigPath $bak -Force
+
+  $newCfg = @"
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+"@
+
+  $existing = Get-Content $ConfigPath -Raw
+  $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\[model_providers' }) -join "`n"
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = $rest -replace '(?m)^\s*supports_websockets\s*=\s*\w+\s*
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> relay-router $BaseUrl (model_provider: codex-relay)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-OpenAI {
+  Backup-Config
+  $bak = Join-Path $CodexHome "config-openai.toml.bak.$((Get-Date).ToString('yyyyMMddHHmmss'))"
+  Copy-Item $ConfigPath $bak -Force
+
+  $newCfg = @"
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+"@
+
+  $existing = Get-Content $ConfigPath -Raw
+  $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\[model_providers' }) -join "`n"
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = ($rest -split "`n" | Where-Object { $_.Trim() -ne '' } | Group-Object | Where-Object { $_.Count -eq 1 -or $_.Name.Trim() -ne '' } | Select-Object -ExpandProperty Name) -join "`n"
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> relay-router $BaseUrl (model_provider: codex-relay)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-OpenAI {
+  Backup-Config
+  $bak = Join-Path $CodexHome "config-openai.toml.bak.$((Get-Date).ToString('yyyyMMddHHmmss'))"
+  Copy-Item $ConfigPath $bak -Force
+
+  $newCfg = @"
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+"@
+
+  $existing = Get-Content $ConfigPath -Raw
+  $rest = ($existing -split "`n" | Where-Object { $_ -notmatch '^model\s*=' -and $_ -notmatch '^model_provider\s*=' -and $_ -notmatch '^model_reasoning_effort\s*=' -and $_ -notmatch '^model_supports_reasoning' -and $_ -notmatch '^model_catalog_json' -and $_ -notmatch '^\s*\[model_providers' }) -join "`n"
+  $rest = $rest -replace '(?m)^\s*name\s*=\s*".*"\s*
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = $rest -replace '(?m)^\s*base_url\s*=\s*".*"\s*
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = $rest -replace '(?m)^\s*supports_websockets\s*=\s*\w+\s*
+  $final = $newCfg + "`n" + ($rest.Trim())
+  Write-Utf8NoBom $ConfigPath $final
+  Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
+  Write-Host "Backup saved: $bak`nRestart any running codex session for the change to take effect."
+}
+
+function Mode-Status {
+  $cliModel = "unknown"; try { $m = Select-String -Path $ConfigPath -Pattern '^model\s*=\s*"(.*)"' | Select-Object -First 1; if ($m) { $cliModel = $m.Matches.Groups[1].Value } } catch {}
+  $cliProvider = "unknown"; try { $p = Select-String -Path $ConfigPath -Pattern '^model_provider\s*=\s*"(.*)"' | Select-Object -First 1; if ($p) { $cliProvider = $p.Matches.Groups[1].Value } } catch {}
+  $cliBase = "unknown"; try { $b = Select-String -Path $ConfigPath -Pattern 'base_url\s*=\s*"(.*)"' | Select-Object -First 1; if ($b) { $cliBase = $b.Matches.Groups[1].Value } } catch {}
+  $label = if ($cliBase -eq $BaseUrl) { "router" } else { "openai-direct" }
+  Write-Host ("mode                 : $label")
+  Write-Host ("model                : $cliModel")
+  Write-Host ("provider             : $cliProvider")
+  Write-Host ("base_url             : $cliBase")
+  try { $h = Invoke-RestMethod "${BaseUrl}/__relay/health" -TimeoutSec 2; Write-Host ("relay daemon         : UP pid $($h.pid) config $($h.configHash) fallback=$($h.fallbackEnabled)") } catch { Write-Host "relay daemon         : DOWN (run: relay-codex up)" }
+}
+
+switch ($Command) {
+  'mode' {
+    switch ($Arg1) {
+      'router' { Mode-Router }
+      'openai' { Mode-OpenAI }
+      default  { Mode-Status }
+    }
+  }
+  default { Write-Host "usage: codex-shims.ps1 mode <router|openai|status>" }
+}
+, ''
+  $rest = ($rest -split "`n" | Where-Object { $_.Trim() -ne '' } | Group-Object | Where-Object { $_.Count -eq 1 -or $_.Name.Trim() -ne '' } | Select-Object -ExpandProperty Name) -join "`n"
   $final = $newCfg + "`n" + ($rest.Trim())
   Write-Utf8NoBom $ConfigPath $final
   Write-Host "Codex CLI -> OpenAI direct (model: gpt-5.5)"
